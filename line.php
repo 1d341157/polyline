@@ -184,7 +184,7 @@ abstract class polygonal_chain
 }
 
 /**
- * 
+ * Simplest derived class from polygonal_chain; polyline, synonymous for polygonal chain
  */
 class polyline extends polygonal_chain
 {
