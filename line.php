@@ -13,7 +13,8 @@ define( 'POLYLINE_VERTICES', rand( 4, 7 ) );
 define( 'POLYLINES', 1 ); 
 
 /** 
- * A point in three dimensional Euclidean space 
+ * A point in three dimensional Euclidean space
+ * @todo consider adding dimension t, time. consider how infinite dimensionality might be done.
  */ 
 class point 
 { 
@@ -56,18 +57,18 @@ class point
 
   //Return a comma separated string of x, y, and z coordinates 
   public function __toString( ) 
-  { 
+  {
     //Concatenate the string from the object's properties 
     $string = '(' . $this->x . ',' . $this->y . ',' . $this->z . ')'; 
 
     return( $string ); 
   } 
-} 
+}
 
 /** 
  * Takes two instances of point to construct 
  */ 
-class line_segment 
+class line_segment
 { 
   //The line segment has two points and may also have a name 
   private $p1, $p2; 
@@ -101,59 +102,163 @@ class line_segment
       case 'p2': 
       case 'name': 
         $value = $this->$property; 
-        break; 
+        break;
     } 
 
     //Return a property's value or null 
     return( $value ); 
-  } 
+  }
+
+  /**
+   * Convert the line segment's points to a string
+   * @todo Rewrite this function, i don't think it's appropriately scalable
+   */
+  public function __toString( )
+  {
+    //Initialize a string
+    $string = '';
+
+    //This is supposed to be formatted like the geometric AB w/ overline
+    if( !empty( $this->p1->name ) && !empty( $this->p2->name ) )
+    {
+      
+      $string = $this->p1->name . $this->p2->name;
+    }
+    else
+    {
+      //Call the points' __toString functions and let them handle how to format the string
+      $string = $this->p1 . ',' . $this->p2;
+    }
+
+    //Return the resulting string
+    return( $string );
+  }
 } 
 
 /** 
- * Takes an array of points as input and define's them as the polygonal chain's vertices 
+ * Takes a sequence of line_segments or point objects and constructs a polygonal_chain
+ * @abstract
  */ 
-abstract class polygonal_chain 
+abstract class polygonal_chain implements iterator
 { 
-  //A protected place to store the vertices 
-  protected $vertices = array( ); 
+  //A protected place to store the object's line segments
+  protected $line_segments = array( ); 
 
   //The polygonal chain may have a name 
   private $name = ''; 
 
-  //Define the object's properties
-  public function __construct( $points = array( ), $name = '' )
+  /**
+   * 
+   * @param array $sequence array of objects that will become the line segments of the polygonal chain.
+   * @param string $name the name of the polygonal chain
+   */
+  public function __construct( $sequence = array( ), $name = '' )
   {
-    //Assign the array of points
-    $this->vertices = $this->validate( $points );
+    //Use the sequence of mixed objects to define the line segments
+    $this->line_segments = $this->line_segments( $sequence );
 
     //Define the name of this point 
-    $this->name = $name; 
+    $this->name = $name;
   }
 
-  //Filter the points and define those that pass the test as the polygonal chain's array of vertices
-  protected function validate( $points )  
-  {  
-    //Define an array to hold all of the vertices
-    $vertices = array( );
+  /**
+   * Loop through sequence of elements (objects) and determine the object's line segments
+   * @param array $sequence array of objects, derived from the either class, point or line_segment
+   * @return array of objects (instances of line_segment)
+   */
+  protected function line_segments( $sequence )
+  {
+    //Initialize an array of line segments
+    $line_segments = array( );
 
-    //Check that they points are an array
-    if( is_array( $points ) )
+    //Check that the sequence is an array
+    if( is_array( $sequence ) )
     {
-      //Loop through points array  
-      foreach( $points as $vertex )  
-      {  
-        //Check that they are in fact instances of point  
-        if( $vertex instanceof point )  
-        {  
-          //Add the accepted vertex to the object's array of vertices  
-          $vertices[ ] = $vertex;  
-        }  
+      //Loop through the sequence and iterate through each element  
+      foreach( $sequence as $element )
+      {
+        //Elements may be line segments or individual points; we need to handle them differently
+        if( $element instanceof line_segment )
+        {
+          //Define the line segment
+          $line_segment = $element;
+        }
+        else if( $element instanceof point )
+        {
+          //Try to create a point from this point and the last endpoint
+          if( isset( $endpoint ) )
+          {
+            //Create a new line segment from the existing isolated endpoint
+            $line_segment = new line_segment( $endpoint, $element );
+          }
+          else
+          {
+            //Define the endpoint, for the next iteration with isolated points
+            $endpoint = $element;
+          }
+        }
+
+        //Add the line segment to the array and then remove it from memory so it doesn't get used again
+        if( isset( $line_segment ) )
+        {
+          //Add this line segment to the array of line segments
+          $line_segments[ ] = $line_segment;
+
+          //Define the furthest point, the endpoint
+          $endpoint = $line_segment->p2;
+
+          //Remove the variable from memory
+          unset( $line_segment );
+        }
       }
     }
 
-    //Return the array of vertices
-    return( $vertices );
-  }  
+    //Return the array of line segmentss
+    return( $line_segments );
+  }
+
+  //Rewind the internal pointer of the array of vertices
+  public function rewind( )
+  {
+    reset( $this->line_segments );
+  } 
+
+  //Return the value of the current element
+  public function current( )
+  {
+    return( current( $this->line_segments ) );
+  } 
+
+  //Return the current key for the vertices array
+  public function key( )
+  {
+    return( key( $this->line_segments ) );
+  }
+
+  //Advance internal point of the vertices array
+  public function next( )
+  {
+    return( next( $this->line_segments ) );
+  }
+
+  //Check if current position of the array of vertices internal pointer is valid
+  public function valid( )
+  {
+    //Deault return value
+    $valid = FALSE;
+    
+    //Check the current key
+    $key = key( $this->line_segments );
+
+    //Type check truth of key
+    if( $key !== NULL && $key !== FALSE )
+    {
+      $valid = TRUE;
+    }
+ 
+    //Return whether the key is valid
+    return( $valid );
+  }
 
   //Govern evaluation of private properties 
   public function __get( $property ) 
@@ -176,15 +281,15 @@ abstract class polygonal_chain
   //Return a string of coordinates 
   public function __toString( ) 
   { 
-    //Take the array of vertices and create a comma separated list of them; calling each of their __toString functions 
-    $string = implode( ',', $this->vertices ); 
+    //Take the array of line segments and create a comma separated list of vertices; calling each of their __toString functions 
+    $string = implode( ',', $this->line_segments ); 
 
     return( $string ); 
   }
 }
 
 /**
- * Simplest derived class from polygonal_chain; polyline, synonymous for polygonal chain
+ * Simplest derived class from polygonal_chain. It stores the points that are an instance of point as vertices.
  */
 class polyline extends polygonal_chain
 {
@@ -196,25 +301,22 @@ class polyline extends polygonal_chain
 }
 
 /** 
- * Extends polygonal_chain and changes the constructor to randomly generate the points using an algorithm 
+ * Extends polygonal_chain to randomly generates the points using an algorithm 
  */ 
 class polyline_random extends polygonal_chain
 { 
   //Takes an integer as input value, which determines how mant vertices the polygonal chain shall have 
   public function __construct( $limit, $name = '' )
   { 
-    //Convert the parameter to an integer 
-    $limit = intval( $limit ); 
-
     //Generate some points; -it isn't a polygonal chain without them! 
-    $points = $this->seed( $limit ); 
+    $points = $this->populate( ( int ) $limit ); 
 
     //Invoke parent's constructor with points and assign the name
     parent::__construct( $points, $name );
   } 
 
   //Generate random points for the polygonal chain 
-  protected function seed( $limit, $points = array( ) ) 
+  protected function populate( $limit, $points = array( ) ) 
   { 
     //Keep generating points while the value of $limit is a truthy value 
     if( $limit-- ) 
@@ -223,17 +325,17 @@ class polyline_random extends polygonal_chain
       $x = rand( 0, SVG_WIDTH ); 
       $y = rand( 0, SVG_HEIGHT ); 
 
-      //Create a new point using the above coordinates 
-      $points[ ] = new svg_point( $x, $y ); 
+      //Create a new point using the above coordinates
+      $points[ ] = new svg_point( $x, $y );
 
       //Proceed to the next iteration 
-      $points = $this->seed( $limit, $points ); 
+      $points = $this->populate( $limit, $points ); 
     } 
 
     //Return the array of points 
     return( $points ); 
   } 
-} 
+}
 
 /** 
  * SVG Rendering; point __toString function to output coordinates in format compatible with SVG 
